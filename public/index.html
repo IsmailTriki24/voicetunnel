@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>vc</title>
+</head>
+<body>
+  <h1>Voice chat mte3na</h1>
+  <button onclick="start()">Join Voice</button>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://unpkg.com/simple-peer/simplepeer.min.js"></script>
+  <script>
+    const socket = io("http://localhost:3000"); // Change to public server URL when deployed
+    let peers = {};
+
+    async function start() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      socket.emit('join');
+
+      socket.on('new-user', id => {
+        const peer = new SimplePeer({ initiator: true, trickle: false, stream });
+
+        peer.on('signal', data => {
+          socket.emit('signal', { to: id, from: socket.id, data });
+        });
+
+        peer.on('stream', userStream => {
+          const audio = new Audio();
+          audio.srcObject = userStream;
+          audio.play();
+        });
+
+        peers[id] = peer;
+      });
+
+      socket.on('signal', ({ from, data }) => {
+        if (!peers[from]) {
+          const peer = new SimplePeer({ initiator: false, trickle: false, stream });
+
+          peer.on('signal', data => {
+            socket.emit('signal', { to: from, from: socket.id, data });
+          });
+
+          peer.on('stream', userStream => {
+            const audio = new Audio();
+            audio.srcObject = userStream;
+            audio.play();
+          });
+
+          peers[from] = peer;
+        }
+
+        peers[from].signal(data);
+      });
+
+      socket.on('user-left', id => {
+        if (peers[id]) {
+          peers[id].destroy();
+          delete peers[id];
+        }
+      });
+    }
+  </script>
+</body>
+</html>
